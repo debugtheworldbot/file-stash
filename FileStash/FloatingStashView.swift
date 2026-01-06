@@ -299,8 +299,10 @@ struct FileRowView: View {
             }
         }
         .onDrag {
+            // 记录正在拖拽的文件
+            FileStashManager.shared.draggedFile = file
             // 支持从暂存区拖出文件
-            NSItemProvider(object: file.url as NSURL)
+            return NSItemProvider(object: file.url as NSURL)
         }
         .onTapGesture(count: 2) {
             // 双击打开文件
