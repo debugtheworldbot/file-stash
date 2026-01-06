@@ -27,11 +27,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var fileStashManager = FileStashManager.shared
     var hotKeyManager = HotKeyManager.shared
     var dragMonitor: Any?
+    var mouseDownMonitor: Any?
+    var mouseUpMonitor: Any?
     var globalClickMonitor: Any?
     var statusItem: NSStatusItem?
     
     // 热区配置（仅用于拖拽时触发）
     let dragThreshold: CGFloat = 200
+    
+    // 拖拽检测相关
+    var dragStartLocation: NSPoint?
+    var dragStartTime: Date?
+    var isDraggingFile: Bool = false
+    let minDragDistance: CGFloat = 10  // 最小拖拽距离（像素）
+    let minDragDuration: TimeInterval = 0.15  // 最小拖拽持续时间（秒）
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 首先请求辅助功能权限
@@ -203,22 +212,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     // MARK: - 拖拽监听（只有拖拽文件时才触发热区）
     func setupDragTracking() {
-        // 监听拖拽事件 - 当用户开始拖拽文件时显示窗口
+        // 监听鼠标按下事件 - 记录起始位置和时间
+        mouseDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+            self?.dragStartLocation = NSEvent.mouseLocation
+            self?.dragStartTime = Date()
+            self?.isDraggingFile = false
+        }
+        
+        // 监听鼠标释放事件 - 重置状态
+        mouseUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak self] event in
+            self?.dragStartLocation = nil
+            self?.dragStartTime = nil
+            self?.isDraggingFile = false
+        }
+        
+        // 监听拖拽事件 - 判断是否是真正的文件拖拽
         dragMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged]) { [weak self] event in
             self?.handleDrag(event)
         }
     }
     
     func handleDrag(_ event: NSEvent) {
-        guard isDraggingFile(),
-              let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.main,
+              let startLocation = dragStartLocation,
+              let startTime = dragStartTime else { return }
         
-        let mouseLocation = NSEvent.mouseLocation
+        let currentLocation = NSEvent.mouseLocation
         let screenFrame = screen.frame
         
+        // 计算拖拽距离
+        let dragDistance = sqrt(
+            pow(currentLocation.x - startLocation.x, 2) +
+            pow(currentLocation.y - startLocation.y, 2)
+        )
+        
+        // 计算拖拽持续时间
+        let dragDuration = Date().timeIntervalSince(startTime)
+        
+        // 只有当拖拽距离和持续时间都超过阈值时，才认为是真正的文件拖拽
+        // 这样可以过滤掉简单的点击操作
+        if dragDistance >= minDragDistance && dragDuration >= minDragDuration {
+            isDraggingFile = true
+        }
+        
+        // 只有确认是文件拖拽时，才检测热区
+        guard isDraggingFile else { return }
+        
         // 拖拽时检测是否靠近左下角
-        let isNearHotCorner = mouseLocation.x < (screenFrame.origin.x + dragThreshold) &&
-                              mouseLocation.y < (screenFrame.origin.y + dragThreshold)
+        let isNearHotCorner = currentLocation.x < (screenFrame.origin.x + dragThreshold) &&
+                              currentLocation.y < (screenFrame.origin.y + dragThreshold)
         
         if isNearHotCorner {
             DispatchQueue.main.async { [weak self] in
@@ -226,14 +268,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 FileStashManager.shared.isExpanded = true
             }
         }
-    }
-
-    private func isDraggingFile() -> Bool {
-        let dragPasteboard = NSPasteboard(name: .drag)
-        return dragPasteboard.canReadObject(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true]
-        )
     }
     
     func showWindow() {
@@ -261,6 +295,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // 移除事件监听
         if let monitor = dragMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let monitor = mouseDownMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let monitor = mouseUpMonitor {
             NSEvent.removeMonitor(monitor)
         }
         if let monitor = globalClickMonitor {
