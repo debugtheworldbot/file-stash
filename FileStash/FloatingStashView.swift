@@ -221,8 +221,8 @@ struct FileRowView: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // 文件图标
-            Image(nsImage: file.icon)
+            // 文件图标（使用缓存）
+            Image(nsImage: manager.icon(for: file))
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 32, height: 32)
@@ -338,8 +338,9 @@ struct FileRowView: View {
 // MARK: - 文件预览视图
 struct FilePreviewView: View {
     let file: StashedFile
+    @ObservedObject var manager = FileStashManager.shared
     @State private var previewImage: NSImage?
-    
+
     var body: some View {
         VStack(spacing: 16) {
             // 预览内容
@@ -349,7 +350,7 @@ struct FilePreviewView: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: 300, maxHeight: 300)
             } else {
-                Image(nsImage: file.icon)
+                Image(nsImage: manager.icon(for: file))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 80, height: 80)

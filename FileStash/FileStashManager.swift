@@ -16,42 +16,63 @@ struct StashedFile: Identifiable, Codable, Equatable {
     let fileName: String
     let fileExtension: String
     let isDirectory: Bool
-    let fileSize: Int64
+    var fileSize: Int64
     let dateAdded: Date
-    
+    /// 标记文件大小是否还在计算中
+    var isSizeCalculating: Bool = false
+
     var displayName: String {
         if fileExtension.isEmpty {
             return fileName
         }
         return "\(fileName).\(fileExtension)"
     }
-    
+
     var url: URL {
         URL(fileURLWithPath: originalPath)
     }
-    
-    var icon: NSImage {
-        NSWorkspace.shared.icon(forFile: originalPath)
-    }
-    
+
     var formattedSize: String {
+        if isSizeCalculating {
+            return "计算中..."
+        }
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: fileSize)
+    }
+
+    // Codable 需要排除 isSizeCalculating
+    enum CodingKeys: String, CodingKey {
+        case id, originalPath, fileName, fileExtension, isDirectory, fileSize, dateAdded
     }
 }
 
 /// 文件暂存管理器
 class FileStashManager: ObservableObject {
     static let shared = FileStashManager()
-    
+
     @Published var stashedFiles: [StashedFile] = []
     @Published var isExpanded: Bool = false
-    
+
     private let saveKey = "StashedFiles"
-    
+
+    /// 图标缓存，避免重复获取
+    private var iconCache: [String: NSImage] = [:]
+    /// 后台队列用于计算文件夹大小
+    private let sizeCalculationQueue = DispatchQueue(label: "com.filestash.sizeCalculation", qos: .utility)
+
     private init() {
         loadFiles()
+    }
+
+    /// 获取文件图标（带缓存）
+    func icon(for file: StashedFile) -> NSImage {
+        if let cached = iconCache[file.originalPath] {
+            return cached
+        }
+        let icon = NSWorkspace.shared.icon(forFile: file.originalPath)
+        iconCache[file.originalPath] = icon
+        return icon
     }
     
     /// 添加文件到暂存区
@@ -60,44 +81,69 @@ class FileStashManager: ObservableObject {
         if stashedFiles.contains(where: { $0.originalPath == url.path }) {
             return false
         }
-        
+
         // 检查文件是否存在
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
             return false
         }
-        
-        // 获取文件大小
-        let fileSize: Int64
+
+        let fileId = UUID()
+
+        // 普通文件：直接获取大小；文件夹：先显示，后台计算
         if isDirectory.boolValue {
-            fileSize = calculateDirectorySize(url: url)
+            let file = StashedFile(
+                id: fileId,
+                originalPath: url.path,
+                fileName: url.deletingPathExtension().lastPathComponent,
+                fileExtension: url.pathExtension,
+                isDirectory: true,
+                fileSize: 0,
+                dateAdded: Date(),
+                isSizeCalculating: true
+            )
+            stashedFiles.insert(file, at: 0)
+            saveFiles()
+
+            // 后台计算文件夹大小
+            sizeCalculationQueue.async { [weak self] in
+                let size = self?.calculateDirectorySize(url: url) ?? 0
+                DispatchQueue.main.async {
+                    guard let self = self,
+                          let index = self.stashedFiles.firstIndex(where: { $0.id == fileId }) else { return }
+                    self.stashedFiles[index].fileSize = size
+                    self.stashedFiles[index].isSizeCalculating = false
+                    self.saveFiles()
+                }
+            }
         } else {
-            fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+            let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+            let file = StashedFile(
+                id: fileId,
+                originalPath: url.path,
+                fileName: url.deletingPathExtension().lastPathComponent,
+                fileExtension: url.pathExtension,
+                isDirectory: false,
+                fileSize: fileSize,
+                dateAdded: Date()
+            )
+            stashedFiles.insert(file, at: 0)
+            saveFiles()
         }
-        
-        let file = StashedFile(
-            id: UUID(),
-            originalPath: url.path,
-            fileName: url.deletingPathExtension().lastPathComponent,
-            fileExtension: url.pathExtension,
-            isDirectory: isDirectory.boolValue,
-            fileSize: fileSize,
-            dateAdded: Date()
-        )
-        
-        stashedFiles.insert(file, at: 0)
-        saveFiles()
+
         return true
     }
     
     /// 从暂存区移除文件
     func removeFile(_ file: StashedFile) {
+        iconCache.removeValue(forKey: file.originalPath)
         stashedFiles.removeAll { $0.id == file.id }
         saveFiles()
     }
-    
+
     /// 移除所有文件
     func clearAll() {
+        iconCache.removeAll()
         stashedFiles.removeAll()
         saveFiles()
     }

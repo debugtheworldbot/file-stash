@@ -47,7 +47,7 @@ struct SettingsView: View {
             }
         }
         .padding(24)
-        .frame(width: 350, height: 280)
+        .frame(width: 350, height: 340)
     }
     
     // MARK: - 权限状态
