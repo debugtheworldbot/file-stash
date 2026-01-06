@@ -31,16 +31,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var mouseUpMonitor: Any?
     var globalClickMonitor: Any?
     var statusItem: NSStatusItem?
-    
+    var mouseMoveMonitor: Any?
+
     // 热区配置（仅用于拖拽时触发）
     let dragThreshold: CGFloat = 200
-    
+
     // 拖拽检测相关
     var dragStartLocation: NSPoint?
     var dragStartTime: Date?
     var isDraggingFile: Bool = false
     let minDragDistance: CGFloat = 10  // 最小拖拽距离（像素）
     let minDragDuration: TimeInterval = 0.15  // 最小拖拽持续时间（秒）
+
+    // 鼠标晃动检测相关（左下角）
+    let shakeCornerThresholdX: CGFloat = 320  // 左下角热区宽度（覆盖窗口300+边距）
+    let shakeCornerThresholdY: CGFloat = 470  // 左下角热区高度（覆盖窗口450+边距）
+    var recentMousePositions: [(point: NSPoint, time: Date)] = []
+    let shakeTimeWindow: TimeInterval = 1.0  // 检测时间窗口
+    let shakeDirectionChanges: Int = 3  // 需要的方向变化次数
+    let shakeMinDistance: CGFloat = 2  // 最小移动距离
+    var lastShakeTriggerTime: Date?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 首先请求辅助功能权限
@@ -51,6 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupHotKey()
         setupDragTracking()
         setupClickOutsideMonitor()
+        setupMouseShakeDetection()
         
         // 隐藏 Dock 图标
         NSApp.setActivationPolicy(.accessory)
@@ -270,6 +281,83 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    // MARK: - 鼠标晃动检测（左下角）
+    func setupMouseShakeDetection() {
+        mouseMoveMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+            self?.handleMouseMove(event)
+        }
+    }
+
+    func handleMouseMove(_ event: NSEvent) {
+        guard let screen = NSScreen.main else { return }
+
+        let currentLocation = NSEvent.mouseLocation
+        let screenFrame = screen.frame
+        let now = Date()
+
+        // 检查是否在左下角区域（覆盖整个窗口范围）
+        let isInBottomLeftCorner = currentLocation.x < (screenFrame.origin.x + shakeCornerThresholdX) &&
+                                   currentLocation.y < (screenFrame.origin.y + shakeCornerThresholdY)
+
+        guard isInBottomLeftCorner else {
+            recentMousePositions.removeAll()
+            return
+        }
+
+        // 记录鼠标位置
+        recentMousePositions.append((point: currentLocation, time: now))
+
+        // 移除超出时间窗口的记录
+        recentMousePositions.removeAll { now.timeIntervalSince($0.time) > shakeTimeWindow }
+
+        // 检测晃动
+        if detectShake() {
+            // 防止连续触发
+            if let lastTrigger = lastShakeTriggerTime, now.timeIntervalSince(lastTrigger) < 1.0 {
+                return
+            }
+
+            lastShakeTriggerTime = now
+            recentMousePositions.removeAll()
+
+            DispatchQueue.main.async { [weak self] in
+                self?.showWindow()
+                FileStashManager.shared.isExpanded = true
+            }
+        }
+    }
+
+    func detectShake() -> Bool {
+        guard recentMousePositions.count >= 4 else { return false }
+
+        var directionChanges = 0
+        var lastDeltaX: CGFloat = 0
+        var lastDeltaY: CGFloat = 0
+
+        for i in 1..<recentMousePositions.count {
+            let prev = recentMousePositions[i - 1].point
+            let curr = recentMousePositions[i].point
+            let deltaX = curr.x - prev.x
+            let deltaY = curr.y - prev.y
+            let distance = sqrt(deltaX * deltaX + deltaY * deltaY)
+
+            // 忽略太小的移动
+            if distance >= shakeMinDistance {
+                // 使用点积检测方向反转（点积为负表示方向相反）
+                if lastDeltaX != 0 || lastDeltaY != 0 {
+                    let dotProduct = deltaX * lastDeltaX + deltaY * lastDeltaY
+                    if dotProduct < 0 {
+                        directionChanges += 1
+                    }
+                }
+                lastDeltaX = deltaX
+                lastDeltaY = deltaY
+            }
+        }
+
+        return directionChanges >= shakeDirectionChanges
+    }
+
     func showWindow() {
         guard let window = floatingWindow else { return }
         
@@ -306,7 +394,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let monitor = globalClickMonitor {
             NSEvent.removeMonitor(monitor)
         }
-        
+        if let monitor = mouseMoveMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+
         // 注销快捷键
         hotKeyManager.unregisterHotKey()
         
