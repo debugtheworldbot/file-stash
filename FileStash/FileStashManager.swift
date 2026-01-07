@@ -62,9 +62,6 @@ class FileStashManager: ObservableObject {
     @Published var stashedFiles: [StashedFile] = []
     @Published var isExpanded: Bool = false
 
-    /// 当前正在拖拽的文件（用于拖出后删除）
-    var draggedFile: StashedFile?
-
     private let saveKey = "StashedFiles"
 
     /// 图标缓存，避免重复获取

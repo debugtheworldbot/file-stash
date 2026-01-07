@@ -217,17 +217,7 @@ struct FloatingStashView: View {
                 }
 
                 DispatchQueue.main.async {
-                    // 检查是否是从暂存区拖出又拖回来的文件
-                    if let draggedFile = manager.draggedFile,
-                       draggedFile.originalPath == url.path {
-                        // 是自己拖出的文件，不重复添加
-                        manager.draggedFile = nil
-                        return
-                    }
-
                     _ = manager.addFile(from: url)
-                    // 清除拖拽状态
-                    manager.draggedFile = nil
                 }
             }
         }
@@ -305,42 +295,38 @@ struct FileRowView: View {
             
             // 操作按钮
             if isHovering {
-                HStack(spacing: 8) {
+                HStack(spacing: 4) {
                     // 置顶按钮
-                    Button(action: {
+                    ActionButton(
+                        icon: file.isPinned ? "pin.fill" : "pin",
+                        color: file.isPinned ? .accentColor : .secondary,
+                        help: file.isPinned ? "取消置顶" : "置顶"
+                    ) {
                         withAnimation {
                             manager.togglePin(file)
                         }
-                    }) {
-                        Image(systemName: file.isPinned ? "pin.fill" : "pin")
-                            .font(.caption)
-                            .foregroundColor(file.isPinned ? .accentColor : .secondary)
                     }
-                    .buttonStyle(.plain)
-                    .help(file.isPinned ? "取消置顶" : "置顶")
 
                     // 在 Finder 中显示
-                    Button(action: {
+                    ActionButton(
+                        icon: "folder",
+                        color: .secondary,
+                        help: "在 Finder 中显示"
+                    ) {
                         manager.revealInFinder(file)
-                    }) {
-                        Image(systemName: "folder")
-                            .font(.caption)
                     }
-                    .buttonStyle(.plain)
-                    .help("在 Finder 中显示")
 
                     // 删除按钮
-                    Button(action: {
+                    ActionButton(
+                        icon: "xmark",
+                        color: .secondary,
+                        hoverColor: .red,
+                        help: "从暂存区移除"
+                    ) {
                         withAnimation {
                             manager.removeFile(file)
                         }
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .help("从暂存区移除")
                 }
             }
         }
@@ -357,10 +343,8 @@ struct FileRowView: View {
             }
         }
         .onDrag {
-            // 记录正在拖拽的文件
-            FileStashManager.shared.draggedFile = file
             // 支持从暂存区拖出文件
-            return NSItemProvider(object: file.url as NSURL)
+            NSItemProvider(object: file.url as NSURL)
         }
         .onTapGesture(count: 2) {
             // 双击打开文件
@@ -389,6 +373,38 @@ struct FileRowView: View {
                 withAnimation {
                     manager.removeFile(file)
                 }
+            }
+        }
+    }
+}
+
+// MARK: - 操作按钮组件
+struct ActionButton: View {
+    let icon: String
+    let color: Color
+    var hoverColor: Color? = nil
+    let help: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(isHovering ? (hoverColor ?? color) : color)
+                .frame(width: 24, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isHovering ? Color.gray.opacity(0.2) : Color.clear)
+                )
+                .scaleEffect(isHovering ? 1.1 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
             }
         }
     }

@@ -29,7 +29,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var globalClickMonitor: Any?
     var statusItem: NSStatusItem?
     var mouseMoveMonitor: Any?
-    var dragEndMonitor: Any?
 
     // 热区配置（仅用于拖拽时触发）
     let dragThreshold: CGFloat = 200
@@ -56,7 +55,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupDragTracking()
         setupClickOutsideMonitor()
         setupMouseShakeDetection()
-        setupDragEndMonitor()
 
         // 隐藏 Dock 图标
         NSApp.setActivationPolicy(.accessory)
@@ -300,40 +298,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return directionChanges >= shakeDirectionChanges
     }
 
-    // MARK: - 拖拽结束检测（用于从暂存区拖出文件后删除）
-    func setupDragEndMonitor() {
-        // 使用定时器检测拖拽结束，因为拖放操作期间全局鼠标事件可能不会触发
-        dragEndMonitor = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.checkDragCompletion()
-        } as AnyObject
-    }
-
-    func checkDragCompletion() {
-        // 检查是否有正在拖拽的文件
-        guard let draggedFile = fileStashManager.draggedFile else { return }
-
-        // 检查鼠标按键是否已释放（0 表示没有按键按下）
-        let pressedButtons = NSEvent.pressedMouseButtons
-        guard pressedButtons == 0 else { return }
-
-        // 鼠标已释放，清除拖拽状态
-        fileStashManager.draggedFile = nil
-
-        // 检查鼠标释放位置是否在窗口外
-        guard let window = floatingWindow else { return }
-
-        let mouseLocation = NSEvent.mouseLocation
-        let windowFrame = window.frame
-
-        // 如果鼠标在窗口外部，说明文件被拖出到其他地方
-        // 只有未置顶的文件才会被删除，置顶的文件保留在暂存区
-        if !windowFrame.contains(mouseLocation) && !draggedFile.isPinned {
-            DispatchQueue.main.async { [weak self] in
-                self?.fileStashManager.removeFile(draggedFile)
-            }
-        }
-    }
-
     func showWindow() {
         guard let window = floatingWindow else { return }
         
@@ -372,9 +336,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let monitor = mouseMoveMonitor {
             NSEvent.removeMonitor(monitor)
-        }
-        if let timer = dragEndMonitor as? Timer {
-            timer.invalidate()
         }
 
         // 应用退出时保存数据
