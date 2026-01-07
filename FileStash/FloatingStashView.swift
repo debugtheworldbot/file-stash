@@ -13,6 +13,18 @@ struct FloatingStashView: View {
     @State private var isHovering = false
     @State private var isDraggingOver = false
     @State private var showClearConfirmation = false
+    @State private var searchText = ""
+    @AppStorage("showSearchBar") private var showSearchBar = false
+
+    /// 根据搜索词过滤后的文件列表
+    private var filteredFiles: [StashedFile] {
+        if searchText.isEmpty || !showSearchBar {
+            return manager.stashedFiles
+        }
+        return manager.stashedFiles.filter {
+            $0.displayName.localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -98,11 +110,18 @@ struct FloatingStashView: View {
                 // 标题栏
                 headerView
 
+                // 搜索栏
+                if showSearchBar && !manager.stashedFiles.isEmpty {
+                    searchBar
+                }
+
                 Divider()
 
                 // 文件列表
                 if manager.stashedFiles.isEmpty {
                     emptyStateView
+                } else if showSearchBar && filteredFiles.isEmpty {
+                    noResultsView
                 } else {
                     fileListView
                 }
@@ -211,6 +230,20 @@ struct FloatingStashView: View {
                 .foregroundColor(.secondary)
 
             if !manager.stashedFiles.isEmpty {
+                // 搜索按钮
+                ActionButton(
+                    icon: "magnifyingglass",
+                    color: showSearchBar ? .accentColor : .secondary,
+                    help: showSearchBar ? "关闭搜索" : "搜索"
+                ) {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                        showSearchBar.toggle()
+                        if !showSearchBar {
+                            searchText = ""
+                        }
+                    }
+                }
+
                 // 清空按钮
                 ActionButton(
                     icon: "trash",
@@ -239,9 +272,9 @@ struct FloatingStashView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
     }
-    
+
     // MARK: - 空状态视图
     private var emptyStateView: some View {
         VStack(spacing: 12) {
@@ -260,11 +293,58 @@ struct FloatingStashView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
+    // MARK: - 搜索栏
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+                .font(.system(size: 12))
+
+            TextField("搜索文件...", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+
+            if !searchText.isEmpty {
+                Button(action: {
+                    searchText = ""
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.gray.opacity(0.1))
+        )
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - 无搜索结果视图
+    private var noResultsView: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "doc.questionmark")
+                .font(.system(size: 32))
+                .foregroundColor(.secondary.opacity(0.5))
+
+            Text("未找到匹配的文件")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     // MARK: - 文件列表视图
     private var fileListView: some View {
         ScrollView {
             LazyVStack(spacing: 8) {
-                ForEach(manager.stashedFiles) { file in
+                ForEach(filteredFiles) { file in
                     FileRowView(file: file)
                         .transition(.asymmetric(
                             insertion: .scale.combined(with: .opacity),

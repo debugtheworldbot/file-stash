@@ -20,6 +20,12 @@ struct FileStashApp: App {
     }
 }
 
+/// 自定义窗口类，允许 borderless 窗口接收键盘输入
+class KeyableWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     var floatingWindow: NSWindow?
     var fileStashManager = FileStashManager.shared
@@ -64,8 +70,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 创建悬浮窗口
         let contentView = FloatingStashView()
         
-        floatingWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 450),
+        floatingWindow = KeyableWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 450),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -300,12 +306,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showWindow() {
         guard let window = floatingWindow else { return }
-        
+
         if window.alphaValue < 1 {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.2
                 window.animator().alphaValue = 1
             }
+            // 激活窗口以接收键盘输入
+            window.makeKey()
         }
     }
     
