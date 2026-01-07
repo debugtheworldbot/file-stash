@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FileStash is a macOS application built with SwiftUI that provides a floating file staging area in the bottom-left corner of the screen. Users can drag files/folders from Finder into the staging area, and drag them out later. The app uses global hotkeys and drag detection to show/hide the floating window.
+FileStash is a macOS application built with SwiftUI that provides a floating file staging area in the bottom-left corner of the screen. Users can drag files/folders from Finder into the staging area, and drag them out later. The app uses drag detection and mouse shake gestures to show/hide the floating window.
 
 ## Build & Run Commands
 
@@ -28,7 +28,7 @@ xcodebuild -project FileStash.xcodeproj -scheme FileStash clean
 ### Running in Xcode
 - Open FileStash.xcodeproj in Xcode 14+
 - Press Cmd+R to build and run
-- The app requires Accessibility permissions to be granted on first run (System Settings > Privacy & Security > Accessibility)
+- No special permissions required
 
 ## Architecture
 
@@ -55,19 +55,8 @@ xcodebuild -project FileStash.xcodeproj -scheme FileStash clean
 - Implements drag-and-drop receivers using `.onDrop(of: [.fileURL])`
 - File rows support drag-out using `.onDrag` with NSItemProvider
 - Context menu and hover actions for each file
-- Preview popover for images using Quick Look-style preview
-
-**HotKeyManager.swift** (FileStash/HotKeyManager.swift)
-- Singleton managing global hotkey registration using Carbon API
-- Default: Control+Option+S (⌃⌥S)
-- Uses `RegisterEventHotKey` and event handlers from Carbon.HIToolbox
-- Persists custom hotkey configuration to UserDefaults
-- Checks for Accessibility permission via `AXIsProcessTrusted()`
-
-**SettingsView.swift** (FileStash/SettingsView.swift)
-- Settings window for customizing hotkey
-- Interactive recording mode captures key combinations
-- Displays permission status and provides authorization button
+- Image preview support for common image formats (PNG, JPG, SVG, etc.)
+- Pin/unpin functionality for important files
 
 ### Key Design Patterns
 
@@ -80,7 +69,7 @@ xcodebuild -project FileStash.xcodeproj -scheme FileStash clean
 **Event Monitoring**
 - Global mouse drag monitor (`.leftMouseDragged`) detects proximity to hot corner
 - Global click monitor (`.leftMouseDown`, `.rightMouseDown`) detects clicks outside window
-- Carbon event handlers for global hotkey detection
+- Mouse shake detection in bottom-left corner to show/hide window
 - All monitors properly removed in `applicationWillTerminate`
 
 **State Management**
@@ -89,9 +78,7 @@ xcodebuild -project FileStash.xcodeproj -scheme FileStash clean
 - `isExpanded` state synchronized between AppDelegate and FileStashManager
 
 **Permissions**
-- Accessibility permission required for global hotkey functionality
-- Prompts on first launch via `kAXTrustedCheckOptionPrompt`
-- Timer-based permission check until granted
+- No special permissions required (Accessibility permission removed)
 - Sandbox relaxed for file access (entitlements configuration)
 
 ## File Structure
@@ -101,8 +88,6 @@ FileStash/
 ├── FileStashApp.swift          # App entry, AppDelegate, window/event management
 ├── FileStashManager.swift      # File list state and persistence
 ├── FloatingStashView.swift     # Main SwiftUI UI (collapsed/expanded states)
-├── HotKeyManager.swift         # Global hotkey registration and config
-├── SettingsView.swift          # Settings window for hotkey customization
 ├── Assets.xcassets/            # App icon and color assets
 ├── Info.plist                  # App metadata
 └── FileStash.entitlements      # Sandbox and permission configuration
@@ -110,9 +95,11 @@ FileStash/
 
 ## Important Implementation Notes
 
-- **Accessibility Permission**: The app will not function properly without Accessibility permission. Always check `AXIsProcessTrusted()` before hotkey operations.
+- **No Special Permissions**: The app no longer requires Accessibility permission. It uses drag detection and mouse shake gestures instead of global hotkeys.
 - **File References**: The app stores file paths (strings), not security-scoped bookmarks. Files may become inaccessible if moved/deleted. The manager filters out non-existent files on load.
 - **Window Lifecycle**: The floating window is created once at launch and shown/hidden via alpha animations. Never destroyed/recreated during app lifetime.
 - **Drag Detection**: The 200px threshold is hardcoded in AppDelegate. Dragging near the corner triggers display, but only during active drag operations.
+- **Mouse Shake Detection**: Shaking the mouse in the bottom-left corner (320x470px area) will toggle the window visibility.
 - **Thread Safety**: All UI updates from event handlers use `DispatchQueue.main.async` to ensure main thread execution.
 - **Event Handler Cleanup**: All monitors and event handlers must be removed in `applicationWillTerminate` to prevent crashes.
+- **Image Preview**: Image files are displayed with async-generated thumbnails to avoid blocking the UI thread.

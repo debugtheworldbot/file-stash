@@ -211,6 +211,9 @@ class FileStashManager: ObservableObject {
             stashedFiles.append(file)
             sortFiles()
             saveFiles()
+
+            // 如果是图片文件，异步生成预览
+            generateImagePreview(for: file)
         }
 
         return true
@@ -252,7 +255,19 @@ class FileStashManager: ObservableObject {
     
     /// 在 Finder 中显示文件
     func revealInFinder(_ file: StashedFile) {
-        NSWorkspace.shared.selectFile(file.originalPath, inFileViewerRootedAtPath: "")
+        let fileURL = URL(fileURLWithPath: file.originalPath)
+
+        // 检查文件是否存在
+        if FileManager.default.fileExists(atPath: file.originalPath) {
+            // 使用 activateFileViewerSelecting 方法，更可靠
+            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+        } else {
+            // 文件不存在，尝试打开父文件夹
+            let parentURL = fileURL.deletingLastPathComponent()
+            if FileManager.default.fileExists(atPath: parentURL.path) {
+                NSWorkspace.shared.open(parentURL)
+            }
+        }
     }
     
     /// 打开文件
@@ -275,6 +290,11 @@ class FileStashManager: ObservableObject {
             stashedFiles = decoded.filter { FileManager.default.fileExists(atPath: $0.originalPath) }
             // 排序：置顶的文件在最前面
             sortFiles()
+
+            // 异步生成图片预览
+            for file in stashedFiles where file.isImageFile {
+                generateImagePreview(for: file)
+            }
         }
     }
     

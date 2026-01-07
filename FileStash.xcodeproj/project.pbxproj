@@ -11,8 +11,6 @@
 		A1000002001 /* FileStashManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000 /* FileStashManager.swift */; };
 		A1000003001 /* FloatingStashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000003000 /* FloatingStashView.swift */; };
 		A1000004001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000004000 /* Assets.xcassets */; };
-		A1000016001 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016000 /* HotKeyManager.swift */; };
-		A1000017001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000017000 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,8 +21,6 @@
 		A1000005000 /* FileStash.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FileStash.entitlements; sourceTree = "<group>"; };
 		A1000006000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1000007000 /* FileStash.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FileStash.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A1000016000 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
-		A1000017000 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,9 +47,7 @@
 			children = (
 				A1000001000 /* FileStashApp.swift */,
 				A1000002000 /* FileStashManager.swift */,
-				A1000016000 /* HotKeyManager.swift */,
 				A1000003000 /* FloatingStashView.swift */,
-				A1000017000 /* SettingsView.swift */,
 				A1000004000 /* Assets.xcassets */,
 				A1000005000 /* FileStash.entitlements */,
 				A1000006000 /* Info.plist */,
@@ -141,9 +135,7 @@
 			files = (
 				A1000001001 /* FileStashApp.swift in Sources */,
 				A1000002001 /* FileStashManager.swift in Sources */,
-				A1000016001 /* HotKeyManager.swift in Sources */,
 				A1000003001 /* FloatingStashView.swift in Sources */,
-				A1000017001 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

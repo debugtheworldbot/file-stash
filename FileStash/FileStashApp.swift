@@ -7,12 +7,11 @@
 //
 
 import SwiftUI
-import Carbon.HIToolbox
 
 @main
 struct FileStashApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    
+
     var body: some Scene {
         // 使用 Settings 场景来避免显示主窗口
         Settings {
@@ -23,9 +22,7 @@ struct FileStashApp: App {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var floatingWindow: NSWindow?
-    var settingsWindow: NSWindow?
     var fileStashManager = FileStashManager.shared
-    var hotKeyManager = HotKeyManager.shared
     var dragMonitor: Any?
     var mouseDownMonitor: Any?
     var mouseUpMonitor: Any?
@@ -54,37 +51,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var lastShakeTriggerTime: Date?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 首先请求辅助功能权限
-        requestAccessibilityPermissionIfNeeded()
-        
         setupFloatingWindow()
         setupMenuBar()
-        setupHotKey()
         setupDragTracking()
         setupClickOutsideMonitor()
         setupMouseShakeDetection()
         setupDragEndMonitor()
-        
+
         // 隐藏 Dock 图标
         NSApp.setActivationPolicy(.accessory)
-    }
-    
-    // MARK: - 请求辅助功能权限
-    func requestAccessibilityPermissionIfNeeded() {
-        if !AXIsProcessTrusted() {
-            // 弹出系统权限请求对话框
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
-        }
-        
-        // 持续检查权限状态
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            if AXIsProcessTrusted() {
-                self?.hotKeyManager.checkAccessibilityPermission()
-                self?.hotKeyManager.registerHotKey()
-                timer.invalidate()
-            }
-        }
     }
     
     func setupFloatingWindow() {
@@ -142,17 +117,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func updateMenuBarMenu() {
         let menu = NSMenu()
-        
-        let shortcutString = hotKeyManager.currentConfig.displayString
-        menu.addItem(NSMenuItem(title: "打开暂存区 (\(shortcutString))", action: #selector(toggleStash), keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "快捷键设置...", action: #selector(openSettings), keyEquivalent: ","))
+
+        menu.addItem(NSMenuItem(title: "打开暂存区", action: #selector(toggleStash), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "退出", action: #selector(quitApp), keyEquivalent: "q"))
-        
+
         statusItem?.menu = menu
     }
-    
+
     @objc func toggleStash() {
         if floatingWindow?.alphaValue == 0 {
             showWindow()
@@ -162,41 +134,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             fileStashManager.isExpanded = false
         }
     }
-    
-    @objc func openSettings() {
-        if settingsWindow == nil {
-            let settingsView = SettingsView()
-            settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 350, height: 280),
-                styleMask: [.titled, .closable],
-                backing: .buffered,
-                defer: false
-            )
-            settingsWindow?.title = "FileStash 设置"
-            settingsWindow?.contentView = NSHostingView(rootView: settingsView)
-            settingsWindow?.center()
-            settingsWindow?.isReleasedWhenClosed = false
-        }
-        
-        settingsWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-    
+
     @objc func quitApp() {
         NSApplication.shared.terminate(nil)
-    }
-    
-    // MARK: - 快捷键设置
-    func setupHotKey() {
-        // 设置快捷键回调
-        hotKeyManager.onHotKeyPressed = { [weak self] in
-            self?.toggleStash()
-        }
-        
-        // 如果已有权限，立即注册快捷键
-        if AXIsProcessTrusted() {
-            hotKeyManager.registerHotKey()
-        }
     }
     
     // MARK: - 点击窗口外部关闭
@@ -434,9 +374,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSEvent.removeMonitor(monitor)
         }
 
-        // 注销快捷键
-        hotKeyManager.unregisterHotKey()
-        
         // 应用退出时保存数据
         fileStashManager.saveFiles()
     }
