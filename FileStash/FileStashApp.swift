@@ -302,16 +302,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - 拖拽结束检测（用于从暂存区拖出文件后删除）
     func setupDragEndMonitor() {
-        dragEndMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak self] event in
-            self?.handleDragEnd()
-        }
+        // 使用定时器检测拖拽结束，因为拖放操作期间全局鼠标事件可能不会触发
+        dragEndMonitor = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.checkDragCompletion()
+        } as AnyObject
     }
 
-    func handleDragEnd() {
+    func checkDragCompletion() {
         // 检查是否有正在拖拽的文件
         guard let draggedFile = fileStashManager.draggedFile else { return }
 
-        // 清除拖拽状态
+        // 检查鼠标按键是否已释放（0 表示没有按键按下）
+        let pressedButtons = NSEvent.pressedMouseButtons
+        guard pressedButtons == 0 else { return }
+
+        // 鼠标已释放，清除拖拽状态
         fileStashManager.draggedFile = nil
 
         // 检查鼠标释放位置是否在窗口外
@@ -324,9 +329,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 只有未置顶的文件才会被删除，置顶的文件保留在暂存区
         if !windowFrame.contains(mouseLocation) && !draggedFile.isPinned {
             DispatchQueue.main.async { [weak self] in
-                withAnimation {
-                    self?.fileStashManager.removeFile(draggedFile)
-                }
+                self?.fileStashManager.removeFile(draggedFile)
             }
         }
     }
@@ -370,8 +373,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let monitor = mouseMoveMonitor {
             NSEvent.removeMonitor(monitor)
         }
-        if let monitor = dragEndMonitor {
-            NSEvent.removeMonitor(monitor)
+        if let timer = dragEndMonitor as? Timer {
+            timer.invalidate()
         }
 
         // 应用退出时保存数据

@@ -167,7 +167,7 @@ struct FloatingStashView: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .help("关闭 (⌃⌥S)")
+            .help("关闭")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -187,11 +187,6 @@ struct FloatingStashView: View {
             Text("支持文件和文件夹")
                 .font(.caption)
                 .foregroundColor(.secondary.opacity(0.7))
-            
-            Text("快捷键: ⌃⌥S")
-                .font(.caption2)
-                .foregroundColor(.secondary.opacity(0.5))
-                .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
