@@ -53,7 +53,7 @@ struct FloatingStashView: View {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(.ultraThinMaterial)
                     .frame(width: 64, height: 64)
-                    .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 2)
+                    .shadow(color: .black.opacity(0.01), radius: 8, x: 0, y: 4)
             }
 
             // 彩色背景层 - 展开或拖拽时显示
