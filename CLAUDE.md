@@ -8,6 +8,8 @@ FileStash is a macOS application built with SwiftUI that provides a floating fil
 
 ## Build & Run Commands
 
+**IMPORTANT**: DO NOT automatically build the project after making changes. Xcode will auto-build when the user runs the app. Only build if explicitly requested by the user.
+
 ### Building and Running
 ```bash
 # Open in Xcode

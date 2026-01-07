@@ -12,7 +12,6 @@ struct FloatingStashView: View {
     @ObservedObject var manager = FileStashManager.shared
     @State private var isHovering = false
     @State private var isDraggingOver = false
-    @State private var showingPreview: StashedFile? = nil
     
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -36,36 +35,55 @@ struct FloatingStashView: View {
     // MARK: - 收起状态的触发区域
     private var collapsedTrigger: some View {
         ZStack {
-            // 热区背景 - 只在拖拽时显示
-            RoundedRectangle(cornerRadius: 12)
+            // 不透明背景 - 展开或拖拽时显示
+            if isDraggingOver || manager.isExpanded {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 64, height: 64)
+                    .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 2)
+            }
+
+            // 彩色背景层 - 展开或拖拽时显示
+            RoundedRectangle(cornerRadius: 14)
                 .fill(
                     isDraggingOver
                     ? Color.accentColor.opacity(0.3)
-                    : Color.clear
+                    : (manager.isExpanded ? Color.accentColor.opacity(0.15) : Color.clear)
                 )
-                .frame(width: 60, height: 60)
-            
-            // 图标 - 只在拖拽或展开时显示
+                .frame(width: 64, height: 64)
+
+            // 背景圆环 - 展开时显示，增强辨识度
+            if manager.isExpanded {
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 2)
+                    .frame(width: 64, height: 64)
+            }
+
+            // 图标 - 拖拽或展开时显示
             if isDraggingOver || manager.isExpanded {
-                VStack(spacing: 4) {
+                VStack(spacing: 5) {
                     Image(systemName: isDraggingOver ? "arrow.down.doc.fill" : "tray.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(isDraggingOver ? .accentColor : .secondary)
-                    
+                        .font(.system(size: manager.isExpanded ? 28 : 24, weight: .semibold))
+                        .foregroundColor(isDraggingOver ? .accentColor : (manager.isExpanded ? .accentColor : .secondary))
+                        .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+
                     if !manager.stashedFiles.isEmpty {
                         Text("\(manager.stashedFiles.count)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.accentColor))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color.accentColor)
+                                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+                            )
                     }
                 }
                 .transition(.opacity)
             }
         }
-        .frame(width: 60, height: 60)
+        .frame(width: 64, height: 64)
         .onDrop(of: [.fileURL], isTargeted: $isDraggingOver) { providers in
             handleDrop(providers: providers)
             return true
@@ -183,7 +201,7 @@ struct FloatingStashView: View {
         ScrollView {
             LazyVStack(spacing: 8) {
                 ForEach(manager.stashedFiles) { file in
-                    FileRowView(file: file, showingPreview: $showingPreview)
+                    FileRowView(file: file)
                         .transition(.asymmetric(
                             insertion: .scale.combined(with: .opacity),
                             removal: .scale.combined(with: .opacity)
@@ -202,9 +220,19 @@ struct FloatingStashView: View {
                       let url = URL(dataRepresentation: data, relativeTo: nil) else {
                     return
                 }
-                
+
                 DispatchQueue.main.async {
+                    // 检查是否是从暂存区拖出又拖回来的文件
+                    if let draggedFile = manager.draggedFile,
+                       draggedFile.originalPath == url.path {
+                        // 是自己拖出的文件，不重复添加
+                        manager.draggedFile = nil
+                        return
+                    }
+
                     _ = manager.addFile(from: url)
+                    // 清除拖拽状态
+                    manager.draggedFile = nil
                 }
             }
         }
@@ -215,7 +243,6 @@ struct FloatingStashView: View {
 // MARK: - 文件行视图
 struct FileRowView: View {
     let file: StashedFile
-    @Binding var showingPreview: StashedFile?
     @ObservedObject var manager = FileStashManager.shared
     @State private var isHovering = false
     
@@ -252,16 +279,6 @@ struct FileRowView: View {
             // 操作按钮
             if isHovering {
                 HStack(spacing: 8) {
-                    // 预览按钮
-                    Button(action: {
-                        showingPreview = file
-                    }) {
-                        Image(systemName: "eye")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.plain)
-                    .help("快速预览")
-                    
                     // 在 Finder 中显示
                     Button(action: {
                         manager.revealInFinder(file)
@@ -271,7 +288,7 @@ struct FileRowView: View {
                     }
                     .buttonStyle(.plain)
                     .help("在 Finder 中显示")
-                    
+
                     // 删除按钮
                     Button(action: {
                         withAnimation {
@@ -293,6 +310,7 @@ struct FileRowView: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(isHovering ? Color.gray.opacity(0.1) : Color.clear)
         )
+        .contentShape(Rectangle())
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
@@ -312,84 +330,17 @@ struct FileRowView: View {
             Button("打开") {
                 manager.openFile(file)
             }
-            
+
             Button("在 Finder 中显示") {
                 manager.revealInFinder(file)
             }
-            
+
             Divider()
-            
-            Button("快速预览") {
-                showingPreview = file
-            }
-            
-            Divider()
-            
+
             Button("从暂存区移除", role: .destructive) {
                 withAnimation {
                     manager.removeFile(file)
                 }
-            }
-        }
-        .popover(item: $showingPreview) { file in
-            FilePreviewView(file: file)
-        }
-    }
-}
-
-// MARK: - 文件预览视图
-struct FilePreviewView: View {
-    let file: StashedFile
-    @ObservedObject var manager = FileStashManager.shared
-    @State private var previewImage: NSImage?
-
-    var body: some View {
-        VStack(spacing: 16) {
-            // 预览内容
-            if let image = previewImage {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 300, maxHeight: 300)
-            } else {
-                Image(nsImage: manager.icon(for: file))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 80, height: 80)
-            }
-            
-            // 文件信息
-            VStack(spacing: 4) {
-                Text(file.displayName)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                
-                Text(file.formattedSize)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Text(file.originalPath)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-            }
-        }
-        .padding(20)
-        .frame(minWidth: 250, maxWidth: 350)
-        .onAppear {
-            loadPreview()
-        }
-    }
-    
-    private func loadPreview() {
-        // 尝试加载图片预览
-        let imageExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp", "heic"]
-        
-        if imageExtensions.contains(file.fileExtension.lowercased()) {
-            if let image = NSImage(contentsOfFile: file.originalPath) {
-                previewImage = image
             }
         }
     }
