@@ -248,24 +248,34 @@ struct FileRowView: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // 文件图标（使用缓存）
-            Image(nsImage: manager.icon(for: file))
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 32, height: 32)
-            
+            // 文件图标和置顶标识
+            ZStack(alignment: .topTrailing) {
+                Image(nsImage: manager.icon(for: file))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 32, height: 32)
+
+                // 置顶标识
+                if file.isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.accentColor)
+                        .offset(x: 4, y: -4)
+                }
+            }
+
             // 文件信息
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.displayName)
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                
+
                 HStack(spacing: 8) {
                     Text(file.formattedSize)
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    
+
                     if file.isDirectory {
                         Label("文件夹", systemImage: "folder")
                             .font(.caption2)
@@ -279,6 +289,19 @@ struct FileRowView: View {
             // 操作按钮
             if isHovering {
                 HStack(spacing: 8) {
+                    // 置顶按钮
+                    Button(action: {
+                        withAnimation {
+                            manager.togglePin(file)
+                        }
+                    }) {
+                        Image(systemName: file.isPinned ? "pin.fill" : "pin")
+                            .font(.caption)
+                            .foregroundColor(file.isPinned ? .accentColor : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(file.isPinned ? "取消置顶" : "置顶")
+
                     // 在 Finder 中显示
                     Button(action: {
                         manager.revealInFinder(file)
@@ -327,6 +350,14 @@ struct FileRowView: View {
             manager.openFile(file)
         }
         .contextMenu {
+            Button(file.isPinned ? "取消置顶" : "置顶") {
+                withAnimation {
+                    manager.togglePin(file)
+                }
+            }
+
+            Divider()
+
             Button("打开") {
                 manager.openFile(file)
             }

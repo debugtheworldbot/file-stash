@@ -20,6 +20,8 @@ struct StashedFile: Identifiable, Codable, Equatable {
     let dateAdded: Date
     /// 标记文件大小是否还在计算中
     var isSizeCalculating: Bool = false
+    /// 是否置顶
+    var isPinned: Bool = false
 
     var displayName: String {
         if fileExtension.isEmpty {
@@ -43,7 +45,7 @@ struct StashedFile: Identifiable, Codable, Equatable {
 
     // Codable 需要排除 isSizeCalculating
     enum CodingKeys: String, CodingKey {
-        case id, originalPath, fileName, fileExtension, isDirectory, fileSize, dateAdded
+        case id, originalPath, fileName, fileExtension, isDirectory, fileSize, dateAdded, isPinned
     }
 }
 
@@ -150,6 +152,24 @@ class FileStashManager: ObservableObject {
         stashedFiles.removeAll()
         saveFiles()
     }
+
+    /// 置顶/取消置顶文件
+    func togglePin(_ file: StashedFile) {
+        guard let index = stashedFiles.firstIndex(where: { $0.id == file.id }) else { return }
+        stashedFiles[index].isPinned.toggle()
+        sortFiles()
+        saveFiles()
+    }
+
+    /// 排序文件列表：置顶的文件在最前面，其余按添加时间排序
+    private func sortFiles() {
+        stashedFiles.sort { file1, file2 in
+            if file1.isPinned != file2.isPinned {
+                return file1.isPinned
+            }
+            return file1.dateAdded > file2.dateAdded
+        }
+    }
     
     /// 在 Finder 中显示文件
     func revealInFinder(_ file: StashedFile) {
@@ -174,6 +194,8 @@ class FileStashManager: ObservableObject {
            let decoded = try? JSONDecoder().decode([StashedFile].self, from: data) {
             // 过滤掉已不存在的文件
             stashedFiles = decoded.filter { FileManager.default.fileExists(atPath: $0.originalPath) }
+            // 排序：置顶的文件在最前面
+            sortFiles()
         }
     }
     

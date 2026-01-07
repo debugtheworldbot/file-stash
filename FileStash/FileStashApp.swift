@@ -380,8 +380,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let mouseLocation = NSEvent.mouseLocation
         let windowFrame = window.frame
 
-        // 如果鼠标在窗口外部，说明文件被拖出到其他地方，删除该文件
-        if !windowFrame.contains(mouseLocation) {
+        // 如果鼠标在窗口外部，说明文件被拖出到其他地方
+        // 只有未置顶的文件才会被删除，置顶的文件保留在暂存区
+        if !windowFrame.contains(mouseLocation) && !draggedFile.isPinned {
             DispatchQueue.main.async { [weak self] in
                 withAnimation {
                     self?.fileStashManager.removeFile(draggedFile)
