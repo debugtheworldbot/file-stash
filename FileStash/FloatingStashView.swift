@@ -12,7 +12,8 @@ struct FloatingStashView: View {
     @ObservedObject var manager = FileStashManager.shared
     @State private var isHovering = false
     @State private var isDraggingOver = false
-    
+    @State private var showClearConfirmation = false
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             // 展开后的文件列表
@@ -27,9 +28,9 @@ struct FloatingStashView: View {
             // 收起状态的触发区域（始终存在用于接收拖放）
             collapsedTrigger
         }
-        .frame(width: 300, height: 450, alignment: .bottomLeading)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: manager.isExpanded)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDraggingOver)
+        .frame(width: 360, height: 450, alignment: .bottomLeading)
+        .animation(.spring(response: 0.3, dampingFraction: 1.0), value: manager.isExpanded)
+        .animation(.spring(response: 0.3, dampingFraction: 1.0), value: isDraggingOver)
     }
     
     // MARK: - 收起状态的触发区域
@@ -92,20 +93,38 @@ struct FloatingStashView: View {
     
     // MARK: - 展开后的视图
     private var expandedView: some View {
-        VStack(spacing: 0) {
-            // 标题栏
-            headerView
-            
-            Divider()
-            
-            // 文件列表
-            if manager.stashedFiles.isEmpty {
-                emptyStateView
-            } else {
-                fileListView
+        ZStack {
+            VStack(spacing: 0) {
+                // 标题栏
+                headerView
+
+                Divider()
+
+                // 文件列表
+                if manager.stashedFiles.isEmpty {
+                    emptyStateView
+                } else {
+                    fileListView
+                }
+            }
+
+            // 自定义确认弹窗
+            if showClearConfirmation {
+                // 半透明背景 - 只有淡入淡出效果
+                Color.black.opacity(0.3)
+                    .transition(.opacity)
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                            showClearConfirmation = false
+                        }
+                    }
+
+                // 弹窗内容 - 缩放+淡入效果
+                confirmationDialog
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
         }
-        .frame(width: 280, height: 380)
+        .frame(width: 340, height: 380)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial)
@@ -122,52 +141,102 @@ struct FloatingStashView: View {
             return true
         }
     }
+
+    // MARK: - 确认弹窗内容
+    private var confirmationDialog: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "trash.fill")
+                .font(.system(size: 32))
+                .foregroundColor(.red.opacity(0.8))
+
+            Text("确认清空")
+                .font(.headline)
+
+            Text("确定要清空所有暂存的文件吗？")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 12) {
+                Button("取消") {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                        showClearConfirmation = false
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(0.2))
+                )
+
+                Button("清空") {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                        manager.clearAll()
+                        showClearConfirmation = false
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.red)
+                )
+            }
+        }
+        .padding(24)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThickMaterial)
+                .shadow(color: .black.opacity(0.2), radius: 10)
+        )
+    }
     
     // MARK: - 标题栏
     private var headerView: some View {
         HStack {
             Image(systemName: "tray.full.fill")
                 .foregroundColor(.accentColor)
-            
+
             Text("文件暂存区")
                 .font(.headline)
-            
+
             Spacer()
-            
-            Text("\(manager.stashedFiles.count) 个文件")
+
+            Text("共 \(manager.stashedFiles.count) 个文件")
                 .font(.caption)
                 .foregroundColor(.secondary)
-            
+
             if !manager.stashedFiles.isEmpty {
-                Button(action: {
-                    withAnimation {
-                        manager.clearAll()
+                // 清空按钮
+                ActionButton(
+                    icon: "trash",
+                    color: .secondary,
+                    hoverColor: .red,
+                    help: "清空所有"
+                ) {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                        showClearConfirmation = true
                     }
-                }) {
-                    Image(systemName: "trash")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
-                .buttonStyle(.plain)
-                .help("清空所有")
             }
-            
+
             // 关闭按钮
-            Button(action: {
+            ActionButton(
+                icon: "xmark",
+                color: .secondary,
+                help: "关闭"
+            ) {
                 withAnimation {
                     manager.isExpanded = false
-                    // 通知 AppDelegate 隐藏窗口
                     if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
                         appDelegate.hideWindow()
                     }
                 }
-            }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
             }
-            .buttonStyle(.plain)
-            .help("关闭")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
