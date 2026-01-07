@@ -248,18 +248,40 @@ struct FileRowView: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // 文件图标和置顶标识
+            // 文件图标/预览和置顶标识
             ZStack(alignment: .topTrailing) {
-                Image(nsImage: manager.icon(for: file))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 32, height: 32)
+                // 显示图片预览或文件图标
+                Group {
+                    if let preview = manager.imagePreview(for: file) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.gray.opacity(0.1))
+                                .frame(width: 32, height: 32)
+
+                            Image(nsImage: preview)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 32, height: 32)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+                    } else {
+                        Image(nsImage: manager.icon(for: file))
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 32, height: 32)
+                    }
+                }
 
                 // 置顶标识
                 if file.isPinned {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 10))
                         .foregroundColor(.accentColor)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 14, height: 14)
+                        )
                         .offset(x: 4, y: -4)
                 }
             }

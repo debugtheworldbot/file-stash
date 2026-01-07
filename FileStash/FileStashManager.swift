@@ -43,6 +43,12 @@ struct StashedFile: Identifiable, Codable, Equatable {
         return formatter.string(fromByteCount: fileSize)
     }
 
+    /// 是否为图片文件
+    var isImageFile: Bool {
+        let imageExtensions = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "webp", "heic", "heif", "svg"]
+        return imageExtensions.contains(fileExtension.lowercased())
+    }
+
     // Codable 需要排除 isSizeCalculating
     enum CodingKeys: String, CodingKey {
         case id, originalPath, fileName, fileExtension, isDirectory, fileSize, dateAdded, isPinned
@@ -63,8 +69,12 @@ class FileStashManager: ObservableObject {
 
     /// 图标缓存，避免重复获取
     private var iconCache: [String: NSImage] = [:]
+    /// 图片预览缓存
+    private var previewCache: [String: NSImage] = [:]
     /// 后台队列用于计算文件夹大小
     private let sizeCalculationQueue = DispatchQueue(label: "com.filestash.sizeCalculation", qos: .utility)
+    /// 后台队列用于生成图片预览
+    private let previewGenerationQueue = DispatchQueue(label: "com.filestash.previewGeneration", qos: .userInitiated)
 
     private init() {
         loadFiles()
@@ -78,6 +88,71 @@ class FileStashManager: ObservableObject {
         let icon = NSWorkspace.shared.icon(forFile: file.originalPath)
         iconCache[file.originalPath] = icon
         return icon
+    }
+
+    /// 获取图片预览（只返回缓存，不阻塞）
+    func imagePreview(for file: StashedFile) -> NSImage? {
+        // 只为图片文件返回预览
+        guard file.isImageFile else { return nil }
+
+        // 只返回缓存，不生成
+        return previewCache[file.originalPath]
+    }
+
+    /// 异步生成图片预览
+    private func generateImagePreview(for file: StashedFile) {
+        // 只为图片文件生成预览
+        guard file.isImageFile else { return }
+
+        // 如果已有缓存，跳过
+        if previewCache[file.originalPath] != nil {
+            return
+        }
+
+        let path = file.originalPath
+        previewGenerationQueue.async { [weak self] in
+            guard let self = self else { return }
+
+            // 加载图片
+            guard let image = NSImage(contentsOfFile: path) else {
+                return
+            }
+
+            // 生成缩略图（32x32，完整显示不裁切）
+            let targetSize = NSSize(width: 32, height: 32)
+            let thumbnail = NSImage(size: targetSize)
+            thumbnail.lockFocus()
+
+            let imageRect = NSRect(origin: .zero, size: image.size)
+
+            // 计算适配比例（保持宽高比，完整显示）
+            let imageAspect = image.size.width / image.size.height
+
+            var drawRect = NSRect.zero
+            if imageAspect > 1 {
+                // 图片更宽，以宽度为准
+                drawRect.size.width = targetSize.width
+                drawRect.size.height = targetSize.width / imageAspect
+                drawRect.origin.x = 0
+                drawRect.origin.y = (targetSize.height - drawRect.size.height) / 2
+            } else {
+                // 图片更高或正方形，以高度为准
+                drawRect.size.height = targetSize.height
+                drawRect.size.width = targetSize.height * imageAspect
+                drawRect.origin.x = (targetSize.width - drawRect.size.width) / 2
+                drawRect.origin.y = 0
+            }
+
+            image.draw(in: drawRect, from: imageRect, operation: .sourceOver, fraction: 1.0)
+            thumbnail.unlockFocus()
+
+            // 缓存并触发 UI 更新
+            DispatchQueue.main.async {
+                self.previewCache[path] = thumbnail
+                // 触发 SwiftUI 更新
+                self.objectWillChange.send()
+            }
+        }
     }
     
     /// 添加文件到暂存区
@@ -107,7 +182,8 @@ class FileStashManager: ObservableObject {
                 dateAdded: Date(),
                 isSizeCalculating: true
             )
-            stashedFiles.insert(file, at: 0)
+            stashedFiles.append(file)
+            sortFiles()
             saveFiles()
 
             // 后台计算文件夹大小
@@ -132,7 +208,8 @@ class FileStashManager: ObservableObject {
                 fileSize: fileSize,
                 dateAdded: Date()
             )
-            stashedFiles.insert(file, at: 0)
+            stashedFiles.append(file)
+            sortFiles()
             saveFiles()
         }
 
@@ -142,6 +219,7 @@ class FileStashManager: ObservableObject {
     /// 从暂存区移除文件
     func removeFile(_ file: StashedFile) {
         iconCache.removeValue(forKey: file.originalPath)
+        previewCache.removeValue(forKey: file.originalPath)
         stashedFiles.removeAll { $0.id == file.id }
         saveFiles()
     }
@@ -149,6 +227,7 @@ class FileStashManager: ObservableObject {
     /// 移除所有文件
     func clearAll() {
         iconCache.removeAll()
+        previewCache.removeAll()
         stashedFiles.removeAll()
         saveFiles()
     }
